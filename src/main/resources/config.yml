@@ -1,0 +1,5 @@
+# AutoSprint
+enabled: true
+default-enabled: true
+min-food: 6
+debug: false

@@ -1,0 +1,22 @@
+name: AutoSprint
+version: 1.0
+main: com.autosprint.AutoSprint
+api-version: 1.21
+permissions:
+  autosprint.use:
+    description: Toggle auto-sprint
+    default: true
+  autosprint.admin:
+    description: Reload config and toggle debug
+    default: op
+  autosprint.debug:
+    description: Receive debug broadcasts
+    default: op
+commands:
+  autosprint:
+    description: Toggle auto-sprint
+    aliases: [as]
+    usage: |
+      /<command> - toggle
+      /<command> reload - reload config
+      /<command> debug - toggle debug mode
