@@ -50,6 +50,11 @@ public class AutoSprintCommand implements CommandExecutor {
             return true;
         }
 
+        if (!player.hasPermission("autosprint.use")) {
+            player.sendMessage(ChatColor.RED + "No permission.");
+            return true;
+        }
+
         boolean current = AutoSprintManager.isEnabled(player);
         AutoSprintManager.setEnabled(player, !current);
 

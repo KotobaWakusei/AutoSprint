@@ -66,7 +66,6 @@ public class AutoSprint extends JavaPlugin implements Listener {
 
     private boolean canSprint(Player player, int minFood) {
         if (!AutoSprintManager.isEnabled(player)) return false;
-        if (player.isSwimming()) return false;
         if (player.isGliding()) return false;
         if (player.isInsideVehicle()) return false;
         if (player.isRiptiding()) return false;
@@ -74,7 +73,7 @@ public class AutoSprint extends JavaPlugin implements Listener {
         if (player.isBlocking()) return false;
         if (player.getGameMode() != GameMode.SURVIVAL && player.getGameMode() != GameMode.ADVENTURE) return false;
         if (player.getFoodLevel() <= minFood) return false;
-        if (!player.isOnGround()) return false;
+        if (!player.isOnGround() && !player.isSwimming()) return false;
         return true;
     }
 
