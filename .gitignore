@@ -1,1 +1,10 @@
-target/\nliball/\npaper-server.jar\npaper-api.jar\n*.class\n.vscode/\n.idea/\n*.iml\nbuild.bat
+target/
+liball/
+paper-server.jar
+paper-api.jar
+*.class
+.vscode/
+.idea/
+*.iml
+build.bat
+AutoSprint.jar
