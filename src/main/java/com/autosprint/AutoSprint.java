@@ -1,25 +1,22 @@
 package com.autosprint;
 
+import com.github.retrooper.packetevents.PacketEvents;
 import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public class AutoSprint extends JavaPlugin implements Listener {
+public class AutoSprint extends JavaPlugin {
 
     private Debugger debug;
-    private int taskId = -1;
+    private AutoSprintManager manager;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        reloadConfig();
         debug = new Debugger(this);
 
-        getServer().getPluginManager().registerEvents(this, this);
-        AutoSprintManager manager = new AutoSprintManager(this);
+        manager = new AutoSprintManager(this);
+        PacketEvents.getAPI().getEventManager().registerListener(manager);
         getServer().getPluginManager().registerEvents(manager, this);
 
         getCommand("autosprint").setExecutor(new AutoSprintCommand(this));
@@ -30,66 +27,20 @@ public class AutoSprint extends JavaPlugin implements Listener {
             }
         }
 
-        taskId = getServer().getScheduler().runTaskTimer(this, () -> {
-            if (!getConfig().getBoolean("enabled", true)) return;
-            int minFood = getMinFood();
-            for (Player player : getServer().getOnlinePlayers()) {
-                if (player.isSprinting()) continue;
-                if (canSprint(player, minFood)) {
-                    forceSprint(player, "scheduler");
-                }
-            }
-        }, 10L, 1L).getTaskId();
-
-        debug.info("Enabled (task=%d)", taskId);
+        debug.info("Enabled v%s (packet-based)", getDescription().getVersion());
     }
 
     @Override
     public void onDisable() {
-        if (taskId != -1) {
-            getServer().getScheduler().cancelTask(taskId);
-            taskId = -1;
+        if (manager != null) {
+            PacketEvents.getAPI().getEventManager().unregisterListener(manager);
         }
         AutoSprintManager.clear();
         debug.info("Disabled, cleaned up");
     }
 
-    @EventHandler
-    public void onPlayerMove(PlayerMoveEvent event) {
-        Player player = event.getPlayer();
-        if (!getConfig().getBoolean("enabled", true)) return;
-        if (player.isSprinting()) return;
-        if (!canSprint(player, getMinFood())) return;
-        if (!movedHorizontally(event)) return;
-        forceSprint(player, "move");
-    }
-
-    private boolean canSprint(Player player, int minFood) {
-        if (!AutoSprintManager.isEnabled(player)) return false;
-        if (player.isGliding()) return false;
-        if (player.isInsideVehicle()) return false;
-        if (player.isRiptiding()) return false;
-        if (player.isSneaking()) return false;
-        if (player.isBlocking()) return false;
-        if (player.getGameMode() != GameMode.SURVIVAL && player.getGameMode() != GameMode.ADVENTURE) return false;
-        if (player.getFoodLevel() <= minFood) return false;
-        if (!player.isOnGround() && !player.isSwimming()) return false;
-        return true;
-    }
-
-    private boolean movedHorizontally(PlayerMoveEvent event) {
-        double dx = event.getTo().getX() - event.getFrom().getX();
-        double dz = event.getTo().getZ() - event.getFrom().getZ();
-        return Math.sqrt(dx * dx + dz * dz) > 0.001;
-    }
-
-    private void forceSprint(Player player, String source) {
-        try {
-            player.setSprinting(true);
-            debug.fine("Sprint %s [%s]", player.getName(), source);
-        } catch (Exception e) {
-            debug.warn("Sprint failed %s: %s", player.getName(), e.getMessage());
-        }
+    public Debugger getDebugger() {
+        return debug;
     }
 
     public int getMinFood() {
@@ -100,7 +51,16 @@ public class AutoSprint extends JavaPlugin implements Listener {
         return getConfig().getBoolean("enabled", true);
     }
 
-    public Debugger getDebugger() {
-        return debug;
+    public static boolean canSprint(Player player, int minFood) {
+        if (!AutoSprintManager.isEnabled(player)) return false;
+        if (player.isGliding()) return false;
+        if (player.isInsideVehicle()) return false;
+        if (player.isRiptiding()) return false;
+        if (player.isSneaking()) return false;
+        if (player.isBlocking()) return false;
+        if (player.getGameMode() != GameMode.SURVIVAL && player.getGameMode() != GameMode.ADVENTURE) return false;
+        if (player.getFoodLevel() <= minFood) return false;
+        if (!player.isOnGround() && !player.isSwimming()) return false;
+        return true;
     }
 }
