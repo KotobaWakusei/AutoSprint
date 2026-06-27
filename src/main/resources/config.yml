@@ -2,4 +2,8 @@
 enabled: true
 default-enabled: true
 min-food: 6
+forward-threshold: 0.05
+interval-ticks: 1
+air-walk-speed: 0.3
+default-walk-speed: 0.2
 debug: false

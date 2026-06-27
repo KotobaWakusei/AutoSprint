@@ -1,96 +1,78 @@
 package com.autosprint;
 
-import com.github.retrooper.packetevents.event.PacketListenerPriority;
-import com.github.retrooper.packetevents.event.SimplePacketListenerAbstract;
-import com.github.retrooper.packetevents.event.simple.PacketPlayReceiveEvent;
-import com.github.retrooper.packetevents.protocol.packettype.PacketType;
-import com.github.retrooper.packetevents.util.Vector3d;
-import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerPosition;
-import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerPositionAndRotation;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class AutoSprintManager extends SimplePacketListenerAbstract implements Listener {
+public class AutoSprintManager extends BukkitRunnable implements Listener {
 
     private static final Set<UUID> enabledPlayers = ConcurrentHashMap.newKeySet();
-    private static final Map<UUID, Vector3d> lastPositions = new ConcurrentHashMap<>();
+    private static final Set<UUID> explicitlyDisabled = ConcurrentHashMap.newKeySet();
+    private static final Map<UUID, Location> lastPositions = new ConcurrentHashMap<>();
     private static final Map<UUID, Float> lastYaws = new ConcurrentHashMap<>();
+    private static final Set<UUID> airBoosted = ConcurrentHashMap.newKeySet();
+    private static final float FALLBACK_DEFAULT_WALK_SPEED = 0.2f;
 
     private final AutoSprint plugin;
 
     public AutoSprintManager(AutoSprint plugin) {
-        super(PacketListenerPriority.LOWEST);
         this.plugin = plugin;
     }
 
     @Override
-    public void onPacketPlayReceive(PacketPlayReceiveEvent event) {
-        PacketType.Play.Client type = event.getPacketType();
-        if (type != PacketType.Play.Client.PLAYER_POSITION
-                && type != PacketType.Play.Client.PLAYER_POSITION_AND_ROTATION) {
-            return;
-        }
+    public void run() {
+        if (!plugin.isGloballyEnabled()) return;
 
-        Player player = event.getPlayer();
-        if (player == null) return;
-        UUID uid = player.getUniqueId();
-        if (!enabledPlayers.contains(uid)) return;
+        double threshold = plugin.getForwardThreshold();
+        int minFood = plugin.getMinFood();
+        float airWalkSpeed = plugin.getAirWalkSpeed();
+        float defaultWalkSpeed = plugin.getDefaultWalkSpeed();
 
-        Vector3d pos;
-        float yaw;
-
-        if (type == PacketType.Play.Client.PLAYER_POSITION_AND_ROTATION) {
-            WrapperPlayClientPlayerPositionAndRotation wrapper =
-                    new WrapperPlayClientPlayerPositionAndRotation(event);
-            pos = wrapper.getPosition();
-            yaw = wrapper.getYaw();
-            lastYaws.put(uid, yaw);
-        } else {
-            WrapperPlayClientPlayerPosition wrapper =
-                    new WrapperPlayClientPlayerPosition(event);
-            pos = wrapper.getPosition();
-            Float cachedYaw = lastYaws.get(uid);
-            if (cachedYaw == null) return;
-            yaw = cachedYaw;
-        }
-
-        Vector3d last = lastPositions.get(uid);
-        if (last == null) {
-            lastPositions.put(uid, pos);
-            return;
-        }
-
-        double dx = pos.x - last.x;
-        double dz = pos.z - last.z;
-        double distSq = dx * dx + dz * dz;
-
-        if (distSq > 0.0001
-                && dx * -Math.sin(Math.toRadians(yaw))
-                 + dz * Math.cos(Math.toRadians(yaw)) > 0.05) {
-            scheduleSprint(uid);
-        }
-
-        lastPositions.put(uid, pos);
-    }
-
-    private void scheduleSprint(UUID uid) {
-        plugin.getServer().getScheduler().runTask(plugin, () -> {
-            Player player = Bukkit.getPlayer(uid);
-            if (player != null && player.isOnline()
-                    && !player.isSprinting()
-                    && AutoSprint.canSprint(player, plugin.getMinFood())) {
-                player.setSprinting(true);
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            UUID uid = player.getUniqueId();
+            if (!enabledPlayers.contains(uid)) {
+                if (airBoosted.remove(uid)) player.setWalkSpeed(defaultWalkSpeed);
+                continue;
             }
-        });
+
+            Location loc = player.getLocation();
+            Location last = lastPositions.get(uid);
+            float yaw = loc.getYaw();
+            lastYaws.put(uid, yaw);
+
+            boolean movingForward = false;
+            if (last != null && last.getWorld() != null && last.getWorld().equals(loc.getWorld())) {
+                double dx = loc.getX() - last.getX();
+                double dz = loc.getZ() - last.getZ();
+                double distSq = dx * dx + dz * dz;
+                movingForward = distSq > 0.0001
+                        && dx * -Math.sin(Math.toRadians(yaw))
+                         + dz * Math.cos(Math.toRadians(yaw)) > threshold;
+            }
+
+            boolean eligible = movingForward && AutoSprint.canSprint(player, minFood);
+            if (eligible) player.setSprinting(true);
+
+            boolean inAir = !player.isOnGround() && !player.isSwimming();
+            boolean shouldBoost = eligible && inAir;
+            if (shouldBoost) {
+                if (airBoosted.add(uid)) player.setWalkSpeed(airWalkSpeed);
+            } else if (airBoosted.remove(uid)) {
+                player.setWalkSpeed(defaultWalkSpeed);
+            }
+
+            lastPositions.put(uid, loc);
+        }
     }
 
     public static boolean isEnabled(Player player) {
@@ -100,16 +82,23 @@ public class AutoSprintManager extends SimplePacketListenerAbstract implements L
     public static void setEnabled(Player player, boolean state) {
         if (state) {
             enabledPlayers.add(player.getUniqueId());
+            explicitlyDisabled.remove(player.getUniqueId());
         } else {
             enabledPlayers.remove(player.getUniqueId());
+            explicitlyDisabled.add(player.getUniqueId());
+        }
+    }
+
+    public static void enableDefault(Player player) {
+        if (!explicitlyDisabled.contains(player.getUniqueId())) {
+            enabledPlayers.add(player.getUniqueId());
         }
     }
 
     @EventHandler
     public void onJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
         if (plugin.getConfig().getBoolean("default-enabled", true)) {
-            enabledPlayers.add(player.getUniqueId());
+            enableDefault(event.getPlayer());
         }
     }
 
@@ -119,11 +108,18 @@ public class AutoSprintManager extends SimplePacketListenerAbstract implements L
         enabledPlayers.remove(uid);
         lastPositions.remove(uid);
         lastYaws.remove(uid);
+        if (airBoosted.remove(uid)) event.getPlayer().setWalkSpeed(plugin.getDefaultWalkSpeed());
     }
 
     public static void clear() {
+        for (UUID uid : airBoosted) {
+            Player p = Bukkit.getPlayer(uid);
+            if (p != null) p.setWalkSpeed(FALLBACK_DEFAULT_WALK_SPEED);
+        }
         enabledPlayers.clear();
+        explicitlyDisabled.clear();
         lastPositions.clear();
         lastYaws.clear();
+        airBoosted.clear();
     }
 }

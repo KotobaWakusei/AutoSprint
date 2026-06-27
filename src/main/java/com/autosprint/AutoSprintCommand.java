@@ -24,7 +24,7 @@ public class AutoSprintCommand implements CommandExecutor {
             plugin.reloadConfig();
             if (plugin.getConfig().getBoolean("default-enabled", true)) {
                 for (Player p : plugin.getServer().getOnlinePlayers()) {
-                    AutoSprintManager.setEnabled(p, true);
+                    AutoSprintManager.enableDefault(p);
                 }
             }
             sender.sendMessage(ChatColor.GREEN + "AutoSprint config reloaded.");

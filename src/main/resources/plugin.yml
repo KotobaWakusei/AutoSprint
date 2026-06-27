@@ -2,7 +2,6 @@ name: AutoSprint
 version: 2.0
 main: com.autosprint.AutoSprint
 api-version: 1.21
-depend: [packetevents]
 permissions:
   autosprint.use:
     description: Toggle auto-sprint

@@ -1,14 +1,15 @@
 package com.autosprint;
 
-import com.github.retrooper.packetevents.PacketEvents;
 import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 
 public class AutoSprint extends JavaPlugin {
 
     private Debugger debug;
     private AutoSprintManager manager;
+    private BukkitTask task;
 
     @Override
     public void onEnable() {
@@ -16,27 +17,30 @@ public class AutoSprint extends JavaPlugin {
         debug = new Debugger(this);
 
         manager = new AutoSprintManager(this);
-        PacketEvents.getAPI().getEventManager().registerListener(manager);
         getServer().getPluginManager().registerEvents(manager, this);
 
         getCommand("autosprint").setExecutor(new AutoSprintCommand(this));
 
         if (getConfig().getBoolean("default-enabled", true)) {
             for (Player player : getServer().getOnlinePlayers()) {
-                AutoSprintManager.setEnabled(player, true);
+                AutoSprintManager.enableDefault(player);
             }
         }
 
-        debug.info("Enabled v%s (packet-based)", getDescription().getVersion());
+        long interval = Math.max(1L, getConfig().getLong("interval-ticks", 1L));
+        task = manager.runTaskTimer(this, 0L, interval);
+
+        debug.info("Enabled v%s (scheduler-based, interval=%dt)", getDescription().getVersion(), interval);
     }
 
     @Override
     public void onDisable() {
-        if (manager != null) {
-            PacketEvents.getAPI().getEventManager().unregisterListener(manager);
+        if (task != null) {
+            task.cancel();
+            task = null;
         }
         AutoSprintManager.clear();
-        debug.info("Disabled, cleaned up");
+        if (debug != null) debug.info("Disabled, cleaned up");
     }
 
     public Debugger getDebugger() {
@@ -45,6 +49,18 @@ public class AutoSprint extends JavaPlugin {
 
     public int getMinFood() {
         return getConfig().getInt("min-food", 6);
+    }
+
+    public double getForwardThreshold() {
+        return getConfig().getDouble("forward-threshold", 0.05);
+    }
+
+    public float getAirWalkSpeed() {
+        return (float) getConfig().getDouble("air-walk-speed", 0.3);
+    }
+
+    public float getDefaultWalkSpeed() {
+        return (float) getConfig().getDouble("default-walk-speed", 0.2);
     }
 
     public boolean isGloballyEnabled() {
@@ -60,7 +76,6 @@ public class AutoSprint extends JavaPlugin {
         if (player.isBlocking()) return false;
         if (player.getGameMode() != GameMode.SURVIVAL && player.getGameMode() != GameMode.ADVENTURE) return false;
         if (player.getFoodLevel() <= minFood) return false;
-        if (!player.isOnGround() && !player.isSwimming()) return false;
         return true;
     }
 }
