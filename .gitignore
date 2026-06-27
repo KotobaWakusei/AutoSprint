@@ -1,10 +1,39 @@
+# ---- 构建产物 / Build output ----
 target/
-liball/
-paper-server.jar
-paper-api.jar
+build/
+out/
+bin/
+
+# 编译产物 / Compiled classes & jars
 *.class
+*.jar
+
+# OS 生成文件 / OS files
+*.log
+logs/
+*.DS_Store
+Thumbs.db
+
+# IDE 配置 / IDE files
 .vscode/
 .idea/
 *.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+.factorypath
+
+# 本地依赖 / Local dependencies
+liball/
+paper-server.jar
+paper-api.jar
+
+# 构建脚本（个人本地使用）/ Local-only scripts
 build.bat
-AutoSprint.jar
+build.sh
+
+# Maven 临时文件 / Maven temp
+.dependency-reduced-pom.xml
+*.releaseBackup
