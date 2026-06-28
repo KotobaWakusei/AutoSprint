@@ -67,27 +67,24 @@ public class AutoSprintManager extends BukkitRunnable implements Listener {
 
             boolean eligible = movingForward && AutoSprint.canSprint(player, minFood);
 
-            Boolean prev = wasEligible.get(uid);
-            if (prev == null || prev != eligible) {
-                wasEligible.put(uid, eligible);
-                if (debug.isDebug()) {
-                    String why;
-                    if (eligible) {
-                        why = String.format("vel=%.3f,%.3f dot=%.3f", dx, dz, dot);
-                    } else {
-                        if (!movingForward) why = "not moving forward";
-                        else if (player.isGliding()) why = "gliding";
-                        else if (player.isInsideVehicle()) why = "vehicle";
-                        else if (player.isRiptiding()) why = "riptiding";
-                        else if (player.isFlying()) why = "flying";
-                        else if (player.isSneaking()) why = "sneaking";
-                        else if (player.isBlocking()) why = "blocking";
-                        else if (player.getGameMode() != GameMode.SURVIVAL && player.getGameMode() != GameMode.ADVENTURE) why = "game mode";
-                        else if (player.getFoodLevel() <= minFood) why = "food(" + player.getFoodLevel() + ") <= min(" + minFood + ")";
-                        else why = "unknown";
-                    }
-                    debug.fine("%s: sprint %s (%s)", player.getName(), eligible ? "ON" : "OFF", why);
+            Boolean prev = wasEligible.put(uid, eligible);
+            if (prev != null && prev != eligible && debug.isDebug()) {
+                String why;
+                if (eligible) {
+                    why = String.format("vel=%.3f,%.3f dot=%.3f", dx, dz, dot);
+                } else {
+                    if (!movingForward) why = "not moving forward";
+                    else if (player.isGliding()) why = "gliding";
+                    else if (player.isInsideVehicle()) why = "vehicle";
+                    else if (player.isRiptiding()) why = "riptiding";
+                    else if (player.isFlying()) why = "flying";
+                    else if (player.isSneaking()) why = "sneaking";
+                    else if (player.isBlocking()) why = "blocking";
+                    else if (player.getGameMode() != GameMode.SURVIVAL && player.getGameMode() != GameMode.ADVENTURE) why = "game mode";
+                    else if (player.getFoodLevel() <= minFood) why = "food(" + player.getFoodLevel() + ") <= min(" + minFood + ")";
+                    else why = "unknown";
                 }
+                debug.fine("%s: sprint %s (%s)", player.getName(), eligible ? "ON" : "OFF", why);
             }
 
             if (eligible) {
