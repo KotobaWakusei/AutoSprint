@@ -1,13 +1,14 @@
 package com.autosprint;
 
 import org.bukkit.Bukkit;
-import org.bukkit.Location;
+import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Vector;
 
 import java.util.Map;
 import java.util.Set;
@@ -18,9 +19,9 @@ public class AutoSprintManager extends BukkitRunnable implements Listener {
 
     private static final Set<UUID> enabledPlayers = ConcurrentHashMap.newKeySet();
     private static final Set<UUID> explicitlyDisabled = ConcurrentHashMap.newKeySet();
-    private static final Map<UUID, Location> lastPositions = new ConcurrentHashMap<>();
     private static final Set<UUID> airBoosted = ConcurrentHashMap.newKeySet();
     private static final Map<UUID, Float> originalWalkSpeeds = new ConcurrentHashMap<>();
+    private static final Map<UUID, Boolean> wasEligible = new ConcurrentHashMap<>();
 
     private final AutoSprint plugin;
 
@@ -35,10 +36,15 @@ public class AutoSprintManager extends BukkitRunnable implements Listener {
         double threshold = plugin.getForwardThreshold();
         int minFood = plugin.getMinFood();
         float airWalkSpeed = plugin.getAirWalkSpeed();
+        Debugger debug = plugin.getDebugger();
 
         for (Player player : Bukkit.getOnlinePlayers()) {
             UUID uid = player.getUniqueId();
             if (!enabledPlayers.contains(uid)) {
+                Boolean prev = wasEligible.remove(uid);
+                if (prev != null && prev && debug.isDebug()) {
+                    debug.fine("%s: sprint OFF (disabled)", player.getName());
+                }
                 if (airBoosted.remove(uid)) {
                     Float original = originalWalkSpeeds.remove(uid);
                     if (original != null) player.setWalkSpeed(original);
@@ -46,22 +52,49 @@ public class AutoSprintManager extends BukkitRunnable implements Listener {
                 continue;
             }
 
-            Location loc = player.getLocation();
-            Location last = lastPositions.get(uid);
-            float yaw = loc.getYaw();
+            Vector vel = player.getVelocity();
+            double dx = vel.getX();
+            double dz = vel.getZ();
 
+            double dot = 0;
             boolean movingForward = false;
-            if (last != null && last.getWorld() != null && last.getWorld().equals(loc.getWorld())) {
-                double dx = loc.getX() - last.getX();
-                double dz = loc.getZ() - last.getZ();
-                double distSq = dx * dx + dz * dz;
-                movingForward = distSq > 0.0001
-                        && dx * -Math.sin(Math.toRadians(yaw))
-                         + dz * Math.cos(Math.toRadians(yaw)) > threshold;
+            if (dx * dx + dz * dz > 0.0001) {
+                float yaw = player.getLocation().getYaw();
+                dot = dx * -Math.sin(Math.toRadians(yaw))
+                    + dz * Math.cos(Math.toRadians(yaw));
+                movingForward = dot > threshold;
             }
 
             boolean eligible = movingForward && AutoSprint.canSprint(player, minFood);
-            if (eligible) player.setSprinting(true);
+
+            Boolean prev = wasEligible.get(uid);
+            if (prev == null || prev != eligible) {
+                wasEligible.put(uid, eligible);
+                if (debug.isDebug()) {
+                    String why;
+                    if (eligible) {
+                        why = String.format("vel=%.3f,%.3f dot=%.3f", dx, dz, dot);
+                    } else {
+                        if (!movingForward) why = "not moving forward";
+                        else if (player.isGliding()) why = "gliding";
+                        else if (player.isInsideVehicle()) why = "vehicle";
+                        else if (player.isRiptiding()) why = "riptiding";
+                        else if (player.isFlying()) why = "flying";
+                        else if (player.isSneaking()) why = "sneaking";
+                        else if (player.isBlocking()) why = "blocking";
+                        else if (player.getGameMode() != GameMode.SURVIVAL && player.getGameMode() != GameMode.ADVENTURE) why = "game mode";
+                        else if (player.getFoodLevel() <= minFood) why = "food(" + player.getFoodLevel() + ") <= min(" + minFood + ")";
+                        else why = "unknown";
+                    }
+                    debug.fine("%s: sprint %s (%s)", player.getName(), eligible ? "ON" : "OFF", why);
+                }
+            }
+
+            if (eligible) {
+                player.setSprinting(true);
+            } else if (player.isSprinting()) {
+                player.setSprinting(false);
+            }
 
             boolean inAir = !player.isOnGround() && !player.isSwimming();
             boolean shouldBoost = eligible && inAir;
@@ -74,8 +107,6 @@ public class AutoSprintManager extends BukkitRunnable implements Listener {
                 Float original = originalWalkSpeeds.remove(uid);
                 if (original != null) player.setWalkSpeed(original);
             }
-
-            lastPositions.put(uid, loc);
         }
     }
 
@@ -112,7 +143,7 @@ public class AutoSprintManager extends BukkitRunnable implements Listener {
         UUID uid = player.getUniqueId();
         enabledPlayers.remove(uid);
         explicitlyDisabled.remove(uid);
-        lastPositions.remove(uid);
+        wasEligible.remove(uid);
         if (airBoosted.remove(uid)) {
             Float original = originalWalkSpeeds.remove(uid);
             if (original != null) player.setWalkSpeed(original);
@@ -129,7 +160,7 @@ public class AutoSprintManager extends BukkitRunnable implements Listener {
         }
         enabledPlayers.clear();
         explicitlyDisabled.clear();
-        lastPositions.clear();
+        wasEligible.clear();
         airBoosted.clear();
         originalWalkSpeeds.clear();
     }
