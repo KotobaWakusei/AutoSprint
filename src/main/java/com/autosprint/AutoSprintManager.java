@@ -19,9 +19,8 @@ public class AutoSprintManager extends BukkitRunnable implements Listener {
     private static final Set<UUID> enabledPlayers = ConcurrentHashMap.newKeySet();
     private static final Set<UUID> explicitlyDisabled = ConcurrentHashMap.newKeySet();
     private static final Map<UUID, Location> lastPositions = new ConcurrentHashMap<>();
-    private static final Map<UUID, Float> lastYaws = new ConcurrentHashMap<>();
     private static final Set<UUID> airBoosted = ConcurrentHashMap.newKeySet();
-    private static final float FALLBACK_DEFAULT_WALK_SPEED = 0.2f;
+    private static final Map<UUID, Float> originalWalkSpeeds = new ConcurrentHashMap<>();
 
     private final AutoSprint plugin;
 
@@ -36,19 +35,20 @@ public class AutoSprintManager extends BukkitRunnable implements Listener {
         double threshold = plugin.getForwardThreshold();
         int minFood = plugin.getMinFood();
         float airWalkSpeed = plugin.getAirWalkSpeed();
-        float defaultWalkSpeed = plugin.getDefaultWalkSpeed();
 
         for (Player player : Bukkit.getOnlinePlayers()) {
             UUID uid = player.getUniqueId();
             if (!enabledPlayers.contains(uid)) {
-                if (airBoosted.remove(uid)) player.setWalkSpeed(defaultWalkSpeed);
+                if (airBoosted.remove(uid)) {
+                    Float original = originalWalkSpeeds.remove(uid);
+                    if (original != null) player.setWalkSpeed(original);
+                }
                 continue;
             }
 
             Location loc = player.getLocation();
             Location last = lastPositions.get(uid);
             float yaw = loc.getYaw();
-            lastYaws.put(uid, yaw);
 
             boolean movingForward = false;
             if (last != null && last.getWorld() != null && last.getWorld().equals(loc.getWorld())) {
@@ -66,9 +66,13 @@ public class AutoSprintManager extends BukkitRunnable implements Listener {
             boolean inAir = !player.isOnGround() && !player.isSwimming();
             boolean shouldBoost = eligible && inAir;
             if (shouldBoost) {
-                if (airBoosted.add(uid)) player.setWalkSpeed(airWalkSpeed);
+                if (airBoosted.add(uid)) {
+                    originalWalkSpeeds.put(uid, player.getWalkSpeed());
+                }
+                player.setWalkSpeed(airWalkSpeed);
             } else if (airBoosted.remove(uid)) {
-                player.setWalkSpeed(defaultWalkSpeed);
+                Float original = originalWalkSpeeds.remove(uid);
+                if (original != null) player.setWalkSpeed(original);
             }
 
             lastPositions.put(uid, loc);
@@ -104,22 +108,29 @@ public class AutoSprintManager extends BukkitRunnable implements Listener {
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        UUID uid = event.getPlayer().getUniqueId();
+        Player player = event.getPlayer();
+        UUID uid = player.getUniqueId();
         enabledPlayers.remove(uid);
+        explicitlyDisabled.remove(uid);
         lastPositions.remove(uid);
-        lastYaws.remove(uid);
-        if (airBoosted.remove(uid)) event.getPlayer().setWalkSpeed(plugin.getDefaultWalkSpeed());
+        if (airBoosted.remove(uid)) {
+            Float original = originalWalkSpeeds.remove(uid);
+            if (original != null) player.setWalkSpeed(original);
+        }
     }
 
     public static void clear() {
         for (UUID uid : airBoosted) {
             Player p = Bukkit.getPlayer(uid);
-            if (p != null) p.setWalkSpeed(FALLBACK_DEFAULT_WALK_SPEED);
+            if (p != null) {
+                Float original = originalWalkSpeeds.remove(uid);
+                if (original != null) p.setWalkSpeed(original);
+            }
         }
         enabledPlayers.clear();
         explicitlyDisabled.clear();
         lastPositions.clear();
-        lastYaws.clear();
         airBoosted.clear();
+        originalWalkSpeeds.clear();
     }
 }

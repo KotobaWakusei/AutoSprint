@@ -72,6 +72,7 @@ public class AutoSprint extends JavaPlugin {
         if (player.isGliding()) return false;
         if (player.isInsideVehicle()) return false;
         if (player.isRiptiding()) return false;
+        if (player.isFlying()) return false;
         if (player.isSneaking()) return false;
         if (player.isBlocking()) return false;
         if (player.getGameMode() != GameMode.SURVIVAL && player.getGameMode() != GameMode.ADVENTURE) return false;
