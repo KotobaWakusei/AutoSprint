@@ -61,7 +61,7 @@ Target: Paper 1.21.x (`api-version: 1.21`).
   sprint speed multiplier is dropped while `!onGround && !swimming`,
   causing the "jump = walk speed" issue. `AutoSprintManager` tracks
   an `airBoosted` set and temporarily raises `walkSpeed` to
-  `air-walk-speed` (default 0.3) for players currently sprinting in
+  `air-walk-speed` (default 0.4) for players currently sprinting in
   the air; it restores `default-walk-speed` (default 0.2) when the
   boost no longer applies (grounded/swim/not moving/disabled) or on
   quit/disable. Do NOT remove the restore path — players would be

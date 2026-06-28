@@ -56,7 +56,7 @@ public class AutoSprint extends JavaPlugin {
     }
 
     public float getAirWalkSpeed() {
-        return (float) getConfig().getDouble("air-walk-speed", 0.3);
+        return (float) getConfig().getDouble("air-walk-speed", 0.4);
     }
 
     public float getDefaultWalkSpeed() {
